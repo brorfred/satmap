@@ -1,0 +1,7 @@
+#! /usr/bin/env python
+
+import satnrt
+
+if __name__ == "__main__":
+   nr = l2nrt.Nrt()
+   nr.refresh()
