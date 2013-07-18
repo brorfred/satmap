@@ -14,6 +14,7 @@ from pyhdf.SD import SD, SDC
 from njord import nasa
 import l2
 import yrday
+import slippy
 
 class Base(object):
     """Base class for handling Goddard/NASA NRT files"""
@@ -70,6 +71,7 @@ class Nrt(Base):
         self.llat = self.ns.llat.copy()
         self.llon = self.ns.llon.copy()
         self.ft = Ftp(verbose=self.verbose)
+        self.ns.add_ij()
 
     def refresh(self, fieldname='chlor_a'):
         self.ft.refresh()
@@ -82,7 +84,7 @@ class Nrt(Base):
         self.jd = self.ft.jdvec.astype(np.int).max() if jd is None else jd
         self.chl = self.ns.llat * np.nan
         npzfilename = os.path.join(self.npzdir,
-                "NRT%04i%03i_%s.npz" % (self.yr,self.yd,fieldname))
+                    "NRT%04i%03i_%s.npz" % (self.yr,self.yd,fieldname))
         flist = self.ft.get_latest() if jd is None else self.ft.get_byjd(jd)
         exists = self._try_to_read_npz(npzfilename)
         if exists == len(flist):
@@ -116,11 +118,20 @@ class Nrt(Base):
             lt = l2.L2(os.path.join(self.hdfdir, filename))
             lt.load(fieldname='chlor_a')
             mask = ~np.isnan(lt.llat + lt.llon + lt.chlor_a)
+            if len(lt.llon[mask]) == 0: continue
             i,j = self.ns.ll2ij(lt.llon[mask], lt.llat[mask])
             self.chl[j,i] = lt.chlor_a[mask]
             self.chl[self.chl<0.01] = np.nan
         self.jd = lt.jd
 
+    def slippy(self, jd):
+        sl = slippy.TileArray(self.llon, self.llat, maxzoom=8,
+                              lat1=35, lat2=55, lon1=-81, lon2=-10, 
+                              cmin=np.log(0.01), cmax=np.log(10))
+
+        dtstr = pl.num2date(jd).strftime('%Y-%m-%d')
+        sl.save(self.chl, 'dimensions/%s' % dtstr, 
+                '/Users/bror/brorfred.org/')
 
 
     @property

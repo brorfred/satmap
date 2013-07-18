@@ -3,5 +3,5 @@
 import satnrt
 
 if __name__ == "__main__":
-   nr = l2nrt.Nrt()
+   nr = satnrt.Nrt()
    nr.refresh()
