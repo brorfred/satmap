@@ -10,6 +10,7 @@ import json
 import numpy as np
 import pylab as pl
 from pyhdf.SD import SD, SDC
+import requests
 
 from njord import nasa
 import l2
@@ -158,7 +159,7 @@ class Ftp(Base):
         """Download a file from GSFC's website"""
         if not filename in self.fstat.keys(): self.fstat[filename] = {}
         filename = os.path.basename(filename)
-        url = self.urlstamp % filename
+        url = self.fileurl % filename
         try:
             response = urllib2.urlopen(url)
         except:
@@ -183,16 +184,18 @@ class Ftp(Base):
     def get_filelist_from_server(self):
         """Download filelist from server"""
         if self.verbose: print "Downloading filelist from server"
-        ftp = ftplib.FTP(self.ftpserver)
-        ftp.login(self.ftpuser, self.ftppass)
-        filelist = ftp.nlst('/subscriptions/%i' % self.nrtid)
-        self.filelist = [os.path.basename(f) for f in filelist]
+        params = {"subID":self.nrtid, "addurl":1, "results_as_file":1}
+        req = requests.get(self.searchurl, params=params)
+        self.filelist = req.text.split()
         self.newfilelist = []
-        for filename in self.filelist:
-            if not filename in self.fstat.keys():
-                self.fstat[filename] = {'on_server':True, 'staged':False,
-                                        'downloaded':False, 'jd':-999}
-                self.newfilelist.append(filename)
+        for fn in self.filelist:
+            basefn = str(os.path.basename(fn))
+            if not basefn in self.fstat.keys():
+                self.fstat[basefn] = {'on_server':True,
+                                      'staged':False,
+                                      'downloaded':False,
+                                      'jd':-999}
+                self.newfilelist.append(basefn)
         self.fstat.sync()     
 
     def refresh(self):
