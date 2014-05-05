@@ -78,6 +78,12 @@ class Nrt(Base):
         self.ft.refresh()
         for jd in np.unique(self.ft.jdvec[self.ft.jdvec>0].astype(np.int)):
             self.load(fieldname, jd)
+            dtstr = pl.num2date(jd).strftime('%Y-%m-%d')
+            slippydir =  ("/Users/bror/brorfred.org/" +
+                          "tiles/dimensions/%s" % dtstr)
+            print jd, self.ft.lastjd
+            if (not os.path.isdir(slippydir)) | (jd>self.ft.lastjd-1):
+                self.slippy(jd)
             
     def load(self, fieldname="chlor_a", jd=None):
         """Load NRT files and reproject to L3 grid"""
@@ -127,7 +133,8 @@ class Nrt(Base):
 
     def slippy(self, jd):
         sl = slippy.TileArray(self.llon, self.llat, maxzoom=8,
-                              lat1=35, lat2=55, lon1=-81, lon2=-10, 
+                              lat1=self.lat1, lat2=self.lat2,
+                              lon1=self.lon1, lon2=self.lon2, 
                               cmin=np.log(0.01), cmax=np.log(10))
 
         dtstr = pl.num2date(jd).strftime('%Y-%m-%d')
@@ -173,14 +180,18 @@ class Ftp(Base):
             self.fstat[filename]['downloaded'] = True
             if self.verbose: print "Downloading " + filename
             if 'L2_LAC_' in filename:
-                jd = (pl.datestr2num(filename[1:5] + '-1-1') +
-                      int(filename[5:8]) + float(filename[8:10])/24 +
-                      float(filename[10:12])/1440) - 1
+                jd = self.jdfromfilename(filename)
                 self.fstat[filename]['jd'] = jd
             else:
                 self.fstat[filename]['jd'] = -999
         self.fstat.sync()     
 
+    def jdfromfilename(self, filename):
+        return (pl.datestr2num(filename[1:5] + '-1-1') +
+                int(filename[5:8]) + float(filename[8:10])/24 +
+                float(filename[10:12])/1440) - 1
+
+        
     def get_filelist_from_server(self):
         """Download filelist from server"""
         if self.verbose: print "Downloading filelist from server"
@@ -215,6 +226,11 @@ class Ftp(Base):
         mask  = np.array([type in s for s in fnvec])
         return fnvec[mask][jdvec[mask] == jdvec[mask].max()]
 
+    @property
+    def lastjd(self):
+        return self.jdfromfilename(self.get_latest()[-1])
+
+    
     def get_byjd(self, jd, type='OC'):
         """Return names of files from a specified julian date"""
         fnvec = np.array(self.fstat.keys())
