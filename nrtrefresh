@@ -3,5 +3,7 @@
 import satnrt
 
 if __name__ == "__main__":
-   nr = satnrt.Nrt()
-   nr.refresh()
+   nr = satnrt.Nrt('ice')
+   nr.refresh(slippy=True)
+   nr.refresh(fieldname="sst", slippy=True)
+

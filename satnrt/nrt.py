@@ -15,7 +15,7 @@ import requests
 from njord import nasa
 import l2
 import yrday
-import slippy
+import newslippy as slippy
 
 class Base(object):
     """Base class for handling Goddard/NASA NRT files"""
@@ -74,7 +74,7 @@ class Nrt(Base):
         self.ft = Ftp(verbose=self.verbose)
         self.ns.add_ij()
 
-    def refresh(self, fieldname='chlor_a'):
+    def refresh(self, fieldname='chlor_a', slippy=True):
         self.ft.refresh()
         for jd in np.unique(self.ft.jdvec[self.ft.jdvec>0].astype(np.int)):
             self.load(fieldname, jd)
@@ -82,22 +82,25 @@ class Nrt(Base):
             slippydir =  ("/Users/bror/brorfred.org/" +
                           "tiles/dimensions/%s" % dtstr)
             print jd, self.ft.lastjd
-            if (not os.path.isdir(slippydir)) | (jd>self.ft.lastjd-1):
-                self.slippy(jd)
+            if slippy & ((not os.path.isdir(slippydir)) | (jd>self.ft.lastjd-1)):
+                self.slippy()
             
     def load(self, fieldname="chlor_a", jd=None):
         """Load NRT files and reproject to L3 grid"""
+        fpart = "SST" if fieldname=="sst" else "OC"
+        self.fieldname = fieldname
         ft = Ftp(verbose=self.verbose)
         self.jd = self.ft.jdvec.astype(np.int).max() if jd is None else jd
         self.chl = self.ns.llat * np.nan
         npzfilename = os.path.join(self.npzdir,
-                    "NRT%04i%03i_%s.npz" % (self.yr,self.yd,fieldname))
-        flist = self.ft.get_latest() if jd is None else self.ft.get_byjd(jd)
+                    "NRT%s%04i%03i_%s.npz" %
+                    (self.projname,self.yr,self.yd,fieldname))
+        flist = self.ft.get_latest(fpart) if jd is None else self.ft.get_byjd(jd, fpart)
         exists = self._try_to_read_npz(npzfilename)
         if exists == len(flist):
             return
         else:
-            self._merge_l2_files(flist)
+            self._merge_l2_files(fieldname, flist)
             mask = ~np.isnan(self.chl)
             self._write_npz(npzfilename, self.chl[mask],
                             self.ns.imat[mask], self.ns.jmat[mask], flist)
@@ -119,27 +122,39 @@ class Nrt(Base):
         self.chl[fH['jvec'],fH['ivec']] = fH['dvec']
         return len(fH['flist'])
 
-    def _merge_l2_files(self,flist):
+    def _merge_l2_files(self,fieldname, flist):
         for filename in flist:
             if self.verbose: print "    Merging " + filename
             lt = l2.L2(os.path.join(self.hdfdir, filename))
-            lt.load(fieldname='chlor_a')
-            mask = ~np.isnan(lt.llat + lt.llon + lt.chlor_a)
+            lt.load(fieldname=fieldname)
+            ltfield =  getattr(lt, fieldname)
+            mask = ~np.isnan(lt.llat + lt.llon + ltfield)
             if len(lt.llon[mask]) == 0: continue
             i,j = self.ns.ll2ij(lt.llon[mask], lt.llat[mask])
-            self.chl[j,i] = lt.chlor_a[mask]
+            self.chl[j,i] = ltfield[mask]
             self.chl[self.chl<0.01] = np.nan
         self.jd = lt.jd
 
-    def slippy(self, jd):
+    def slippy(self):
+
+        if self.fieldname == "chlor_a":
+            cmin = np.log(0.01)
+            cmax = np.log(10)
+            field = np.log(self.chl)
+            fldstr = ""
+        elif self.fieldname == "sst":
+            cmin = 5
+            cmax = 25
+            field = self.chl
+            fldstr = "sst"
+            
         sl = slippy.TileArray(self.llon, self.llat, maxzoom=8,
                               lat1=self.lat1, lat2=self.lat2,
                               lon1=self.lon1, lon2=self.lon2, 
-                              cmin=np.log(0.01), cmax=np.log(10))
-
-        dtstr = pl.num2date(jd).strftime('%Y-%m-%d')
-        sl.save(self.chl, 'dimensions/%s' % dtstr, 
-                '/Users/bror/brorfred.org/')
+                              cmin=cmin, cmax=cmax)
+        dtstr = pl.num2date(self.jd).strftime('%Y-%m-%d')
+        sl.save(field, '%s%s' % (fldstr, dtstr), 
+                '/Users/bror/brorfred.org/tiles/dimensions/', zip=True, scp=True)
 
 
     @property
