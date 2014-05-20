@@ -81,7 +81,7 @@ class Nrt(Base):
             dtstr = pl.num2date(jd).strftime('%Y-%m-%d')
             slippydir =  ("/Users/bror/brorfred.org/" +
                           "tiles/dimensions/%s" % dtstr)
-            print jd, self.ft.lastjd
+            print jd, self.ft.lastjd,slippydir
             if slippy & ((not os.path.isdir(slippydir)) | (jd>self.ft.lastjd-1)):
                 self.slippy()
             
@@ -154,7 +154,7 @@ class Nrt(Base):
                               cmin=cmin, cmax=cmax)
         dtstr = pl.num2date(self.jd).strftime('%Y-%m-%d')
         sl.save(field, '%s%s' % (fldstr, dtstr), 
-                '/Users/bror/brorfred.org/tiles/dimensions/', zip=True, scp=True)
+                '/Users/bror/brorfred.org/tiles/dimensions', zip=True, scp=True)
 
 
     @property

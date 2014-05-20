@@ -6,11 +6,16 @@ Reference:
     http://wiki.openstreetmap.org/wiki/Slippy_map_tilenames
 """
 import os
+import fnmatch
 import urllib
+import zipfile
 
 import numpy as np
 import pylab as pl
 from scipy.spatial import cKDTree
+
+from paramiko import SSHClient, SSHConfig
+from scp import SCPClient
 
 class TileArray(object):
     """Class to generate off-line slippy tiles from zoomable maps"""
@@ -124,8 +129,8 @@ class TileArray(object):
         tiles[self.nwlon>self.lon2] = np.nan
         return tiles
 
-    def save(self, fld, name, webdir="./", maxzoom=8):
-        pardir = "%s/tiles/%s" % (webdir, name)
+    def save(self, fld, name, webdir="./tiles", maxzoom=8, zip=False, scp=False):
+        pardir = "%s/%s" % (webdir, name)
         self.safemakedirs(pardir)
         cmin = self.cmin if self.cmin is not None else np.nanmin(fld) 
         cmax = self.cmax if self.cmax is not None else np.nanmax(fld) 
@@ -141,10 +146,42 @@ class TileArray(object):
                     self.safemakedirs(tiledir)
                     filename = "%s/%i.png" % (tiledir,
                                               self.jtilemat[j,i])
-                    pl.imsave(filename, np.log(tiles[j:j+255, i:i+255]),
+                    pl.imsave(filename, tiles[j:j+255, i:i+255],
                               vmin=cmin, vmax=cmax)
                     print filename
+        if zip:
+            self.zipdir(pardir+".zip", pardir, basedir=webdir + "/tiles/")
+            if scp:
+                self.scp(pardir+".zip", "dimzip")
 
+            
+    def zipdir(self,zipfilename, dir, basedir=""):
+
+        dir = os.path.abspath(dir)
+        basedir = os.path.abspath(basedir)
+        print zipfilename
+        def find_files(directory, pattern):
+            for root, dirs, files in os.walk(directory):
+                for basename in files:
+                    if fnmatch.fnmatch(basename, pattern):
+                        filename = os.path.join(root, basename)
+                        yield filename
+    
+        with  zipfile.ZipFile(zipfilename,'w', zipfile.ZIP_DEFLATED) as zip:
+            for fn in find_files(dir, "*"):
+                zip.write(fn, fn.replace(basedir, ''))
+
+    def scp(self, filename, remote_path):
+        config = SSHConfig()
+        config.parse(open(os.path.expanduser('~/.ssh/config')))
+        o = config.lookup('geodata')
+        ssh_client = SSHClient()
+        ssh_client.load_system_host_keys()
+        ssh_client.connect(o['hostname'], username=o['user'])
+        scp = SCPClient(ssh_client.get_transport())
+        scp.put(filename, remote_path=remote_path)
+
+                    
     def ijinterp(self,ivec,jvec, field, mask=None, nei=3, dpos=None):
         dist,ij = self.kd.query(list(np.vstack((ivec,jvec)).T), nei)
         sumvec = np.nansum(field[self.kdijvec[ij][:,:,1],

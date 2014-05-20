@@ -146,8 +146,8 @@ class TileArray(object):
         tiles[self.nwlon>self.lon2] = np.nan
         return tiles
 
-    def save(self, fld, name, webdir="./", maxzoom=8, zip=False, scp=False):
-        pardir = "%s/tiles/%s" % (webdir, name)
+    def save(self, fld, name, webdir="./tiles", maxzoom=8, zip=False, scp=False):
+        pardir = "%s/%s" % (webdir, name)
         self.safemakedirs(pardir)
         cmin = self.cmin if self.cmin is not None else np.nanmin(fld) 
         cmax = self.cmax if self.cmax is not None else np.nanmax(fld) 
@@ -167,7 +167,7 @@ class TileArray(object):
                               vmin=cmin, vmax=cmax)
                     print filename
         if zip:
-            self.zipdir(pardir+".zip", pardir, basedir=webdir + "/tiles/")
+            self.zipdir(pardir+".zip", pardir, basedir=webdir)
             if scp:
                 self.scp(pardir+".zip", "dimzip")
 
